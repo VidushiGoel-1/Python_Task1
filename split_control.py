@@ -13,9 +13,6 @@ clock = pygame.time.Clock()
 # Colors
 # ---------------------------------------------------------------------------
 BG_COLOR = (20, 20, 30)
-PLAYER1_COLOR = (80, 200, 255)     # left room character
-PLAYER2_COLOR = (255, 150, 80)     # right room character
-OBSTACLE_COLOR = (200, 60, 60)
 DIVIDER_COLOR = (60, 60, 70)
 
 SPEED = 4
@@ -30,6 +27,21 @@ SAFE_SPAWN_DISTANCE = 100
 font = pygame.font.SysFont(None, 36)
 
 # ---------------------------------------------------------------------------
+# Load images
+# ---------------------------------------------------------------------------
+player1_img = pygame.transform.scale(
+    pygame.image.load("assets/player1.png").convert_alpha(), (40, 40)
+)
+player2_img = pygame.transform.scale(
+    pygame.image.load("assets/player2.png").convert_alpha(), (40, 40)
+)
+obstacle_images = [
+    pygame.transform.scale(pygame.image.load("assets/obstacle1.png").convert_alpha(), (60, 40)),
+    pygame.transform.scale(pygame.image.load("assets/obstacle2.png").convert_alpha(), (60, 40)),
+    pygame.transform.scale(pygame.image.load("assets/obstacle3.png").convert_alpha(), (60, 40)),
+]
+
+# ---------------------------------------------------------------------------
 # Two separate "rooms" side by side on the same screen
 # Left half = room 1, right half = room 2
 # ---------------------------------------------------------------------------
@@ -40,15 +52,15 @@ player1 = pygame.Rect(50, 50, 40, 40)
 player2 = pygame.Rect(WIDTH // 2 + 50, 50, 40, 40)
 
 # Obstacles are DIFFERENT in each room -> forces a path that works for both
-# Each entry is [rect, dx, dy] so obstacles can move and bounce off walls
+# Each entry is [rect, dx, dy, image] so obstacles can move, bounce, and draw their own art
 obstacles1 = [
-    [pygame.Rect(150, 150, 120, 20), 3, 0],
-    [pygame.Rect(100, 300, 20, 120), 0, 2],
+    [pygame.Rect(150, 150, 60, 40), 3, 0, obstacle_images[0]],
+    [pygame.Rect(100, 300, 60, 40), 0, 2, obstacle_images[1]],
 ]
 
 obstacles2 = [
-    [pygame.Rect(WIDTH // 2 + 200, 100, 20, 150), 0, -2],
-    [pygame.Rect(WIDTH // 2 + 300, 350, 150, 20), -3, 0],
+    [pygame.Rect(WIDTH // 2 + 200, 100, 60, 40), 0, -2, obstacle_images[2]],
+    [pygame.Rect(WIDTH // 2 + 300, 350, 60, 40), -3, 0, obstacle_images[0]],
 ]
 
 
@@ -84,14 +96,15 @@ def add_obstacle(obstacles, x_bounds, player_rect):
             continue  # too close to player, try again
         dx = random.choice([-3, -2, 2, 3])
         dy = random.choice([-3, -2, 2, 3])
-        obstacles.append([candidate, dx, dy])
+        image = random.choice(obstacle_images)
+        obstacles.append([candidate, dx, dy, image])
         return
 
 
 def update_obstacles(obstacles, x_bounds):
     """Move each obstacle by its own (dx, dy) and bounce it off room edges."""
     for obs_data in obstacles:
-        rect, dx, dy = obs_data
+        rect, dx, dy = obs_data[0], obs_data[1], obs_data[2]
         rect.x += dx
         rect.y += dy
 
@@ -118,12 +131,12 @@ def draw_everything(game_over, score, lives):
     screen.blit(lives_text, (10, 45))
 
     for obs_data in obstacles1:
-        pygame.draw.rect(screen, OBSTACLE_COLOR, obs_data[0])
+        screen.blit(obs_data[3], obs_data[0])
     for obs_data in obstacles2:
-        pygame.draw.rect(screen, OBSTACLE_COLOR, obs_data[0])
+        screen.blit(obs_data[3], obs_data[0])
 
-    pygame.draw.rect(screen, PLAYER1_COLOR, player1)
-    pygame.draw.rect(screen, PLAYER2_COLOR, player2)
+    screen.blit(player1_img, player1)
+    screen.blit(player2_img, player2)
 
     if game_over:
         over_font = pygame.font.SysFont(None, 60)
@@ -142,12 +155,12 @@ def reset_game():
     player1 = pygame.Rect(50, 50, 40, 40)
     player2 = pygame.Rect(WIDTH // 2 + 50, 50, 40, 40)
     obstacles1 = [
-        [pygame.Rect(150, 150, 120, 20), 3, 0],
-        [pygame.Rect(100, 300, 20, 120), 0, 2],
+        [pygame.Rect(150, 150, 60, 40), 3, 0, obstacle_images[0]],
+        [pygame.Rect(100, 300, 60, 40), 0, 2, obstacle_images[1]],
     ]
     obstacles2 = [
-        [pygame.Rect(WIDTH // 2 + 200, 100, 20, 150), 0, -2],
-        [pygame.Rect(WIDTH // 2 + 300, 350, 150, 20), -3, 0],
+        [pygame.Rect(WIDTH // 2 + 200, 100, 60, 40), 0, -2, obstacle_images[2]],
+        [pygame.Rect(WIDTH // 2 + 300, 350, 60, 40), -3, 0, obstacle_images[0]],
     ]
     score = 0
     lives = 5
