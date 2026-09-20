@@ -9,9 +9,7 @@ screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Split Control")
 clock = pygame.time.Clock()
 
-# 
 # Colors
-# 
 DIVIDER_COLOR = (60, 60, 70)
 
 SPEED = 4
@@ -27,10 +25,9 @@ player1_frame_index = 0
 player2_frame_index = 0
 animation_timer = 0
 font = pygame.font.SysFont(None, 36)
-
-# ---------------------------------------------------------------------------
+ 
 # Load images
-# ---------------------------------------------------------------------------
+
 player1_img = pygame.transform.scale(
     pygame.image.load("assets/player1.png").convert_alpha(), (40, 40)
 )
@@ -39,16 +36,26 @@ player2_img = pygame.transform.scale(
 )
 
 
+def get_content_bounds(surface):
+    mask = pygame.mask.from_surface(surface)
+    rects = mask.get_bounding_rects()
+    if not rects:
+        return surface.get_rect()
+    union = rects[0]
+    for r in rects[1:]:
+        union = union.union(r)
+    return union
+
+
 def slice_sprite_sheet(path, frame_size):
     sheet = pygame.image.load(path).convert_alpha()
     width, height = sheet.get_size()
 
-    # Scan columns for any non-transparent pixel to find content ranges
     col_has_content = []
     for x in range(width):
         has_content = False
-        for y in range(0, height, 4):  # sample every 4th pixel for speed
-            if sheet.get_at((x, y))[3] > 10:  # alpha > 10 = visible
+        for y in range(0, height, 4):
+            if sheet.get_at((x, y))[3] > 10:
                 has_content = True
                 break
         col_has_content.append(has_content)
@@ -68,20 +75,29 @@ def slice_sprite_sheet(path, frame_size):
 
     frames = []
     for start, end in ranges:
-        frame_surface = sheet.subsurface((start, 0, end - start, height))
-        frame_surface = pygame.transform.scale(frame_surface, frame_size)
-        frames.append(frame_surface)
+        loose_slice = sheet.subsurface((start, 0, end - start, height))
+        bounds = get_content_bounds(loose_slice)
+        tight_frame = loose_slice.subsurface(bounds)
+        tight_frame = pygame.transform.scale(tight_frame, frame_size)
+        frames.append(tight_frame)
     return frames
 
 
-player1_frames = slice_sprite_sheet("assets/player1_sheet.png", (40, 40))
-player2_frames = slice_sprite_sheet("assets/player2_sheet.png", (40, 40))
+def load_image_cropped(path, size):
+    img = pygame.image.load(path).convert_alpha()
+    bounds = get_content_bounds(img)
+    cropped = img.subsurface(bounds)
+    return pygame.transform.scale(cropped, size)
+
+
+player1_frames = slice_sprite_sheet("assets/player1_sheet.png", (50, 50))
+player2_frames = slice_sprite_sheet("assets/player2_sheet.png", (50, 50))
 ANIMATION_SPEED = 8  # lower = faster animation
 
 obstacle_images = [
-    pygame.transform.scale(pygame.image.load("assets/obstacle1.png").convert_alpha(), (60, 40)),
-    pygame.transform.scale(pygame.image.load("assets/obstacle2.png").convert_alpha(), (60, 40)),
-    pygame.transform.scale(pygame.image.load("assets/obstacle3.png").convert_alpha(), (60, 40)),
+    load_image_cropped("assets/obstacle1.png", (60, 40)),
+    load_image_cropped("assets/obstacle2.png", (60, 40)),
+    load_image_cropped("assets/obstacle3.png", (60, 40)),
 ]
 background_img = pygame.transform.scale(
     pygame.image.load("assets/background.png").convert(), (WIDTH, HEIGHT)
@@ -92,23 +108,24 @@ background_img = pygame.transform.scale(
 ROOM1_X_RANGE = (0, WIDTH // 2 - 5)
 ROOM2_X_RANGE = (WIDTH // 2 + 5, WIDTH)
 
-player1 = pygame.Rect(50, 50, 40, 40)
-player2 = pygame.Rect(WIDTH // 2 + 50, 50, 40, 40)
+player1 = pygame.Rect(50, 50, 50, 50)
+player2 = pygame.Rect(WIDTH // 2 + 50, 50, 50, 50)
 
 # Obstacles are DIFFERENT in each room -> forces a path that works for both
+# Each entry is [rect, dx, dy, image] so obstacles can move, bounce, and draw their own art
 obstacles1 = [
-    [pygame.Rect(150, 150, 60, 40), 3, 0, obstacle_images[0]],
-    [pygame.Rect(100, 300, 60, 40), 0, 2, obstacle_images[1]],
+    [pygame.Rect(150, 150, 60, 40), 1, 0, obstacle_images[0]],
+    [pygame.Rect(100, 300, 60, 40), 0, 1, obstacle_images[1]],
 ]
 
 obstacles2 = [
-    [pygame.Rect(WIDTH // 2 + 200, 100, 60, 40), 0, -2, obstacle_images[2]],
-    [pygame.Rect(WIDTH // 2 + 300, 350, 60, 40), -3, 0, obstacle_images[0]],
+    [pygame.Rect(WIDTH // 2 + 200, 100, 60, 40), 0, -1, obstacle_images[2]],
+    [pygame.Rect(WIDTH // 2 + 300, 350, 60, 40), -1, 0, obstacle_images[0]],
 ]
 
 
 def move_player(rect, dx, dy, x_bounds):
-    """Move a player rect by (dx, dy), clamped to its room bounds."""
+
     new_rect = rect.move(dx, dy)
 
     new_rect.left = max(x_bounds[0], new_rect.left)
@@ -127,7 +144,6 @@ def check_collision(rect, obstacles):
 
 
 def add_obstacle(obstacles, x_bounds, player_rect):
-    """Add one new obstacle, capped at MAX_OBSTACLES, spawned away from the player."""
     if len(obstacles) >= MAX_OBSTACLES:
         return
 
@@ -137,8 +153,8 @@ def add_obstacle(obstacles, x_bounds, player_rect):
         candidate = pygame.Rect(x, y, 60, 20)
         if candidate.colliderect(player_rect.inflate(SAFE_SPAWN_DISTANCE, SAFE_SPAWN_DISTANCE)):
             continue  # too close to player, try again
-        dx = random.choice([-3, -2, 2, 3])
-        dy = random.choice([-3, -2, 2, 3])
+        dx = random.choice([-1, 1])
+        dy = random.choice([-1, 1])
         image = random.choice(obstacle_images)
         obstacles.append([candidate, dx, dy, image])
         return
@@ -195,15 +211,15 @@ def draw_everything(game_over, score, lives):
 def reset_game():
     global player1, player2, obstacles1, obstacles2, score, lives, invincible_timer, next_difficulty_score
     global player1_frame_index, player2_frame_index, animation_timer
-    player1 = pygame.Rect(50, 50, 40, 40)
-    player2 = pygame.Rect(WIDTH // 2 + 50, 50, 40, 40)
+    player1 = pygame.Rect(50, 50, 50, 50)
+    player2 = pygame.Rect(WIDTH // 2 + 50, 50, 50, 50)
     obstacles1 = [
-        [pygame.Rect(150, 150, 60, 40), 3, 0, obstacle_images[0]],
-        [pygame.Rect(100, 300, 60, 40), 0, 2, obstacle_images[1]],
+        [pygame.Rect(150, 150, 60, 40), 1, 0, obstacle_images[0]],
+        [pygame.Rect(100, 300, 60, 40), 0, 1, obstacle_images[1]],
     ]
     obstacles2 = [
-        [pygame.Rect(WIDTH // 2 + 200, 100, 60, 40), 0, -2, obstacle_images[2]],
-        [pygame.Rect(WIDTH // 2 + 300, 350, 60, 40), -3, 0, obstacle_images[0]],
+        [pygame.Rect(WIDTH // 2 + 200, 100, 60, 40), 0, -1, obstacle_images[2]],
+        [pygame.Rect(WIDTH // 2 + 300, 350, 60, 40), -1, 0, obstacle_images[0]],
     ]
     score = 0
     lives = 5
@@ -216,8 +232,8 @@ def reset_game():
 
 def reset_positions():
     global player1, player2, invincible_timer
-    player1 = pygame.Rect(50, 50, 40, 40)
-    player2 = pygame.Rect(WIDTH // 2 + 50, 50, 40, 40)
+    player1 = pygame.Rect(50, 50, 50, 50)
+    player2 = pygame.Rect(WIDTH // 2 + 50, 50, 50, 50)
     invincible_timer = INVINCIBLE_FRAMES
 
 
@@ -272,7 +288,7 @@ def main():
                 add_obstacle(obstacles2, ROOM2_X_RANGE, player2)
                 next_difficulty_score += DIFFICULTY_STEP
 
-            # SAME input applied to BOTH players - this is the core mechanic...
+            # SAME input applied to BOTH players - this is the core mechanic
             player1 = move_player(player1, dx, dy, ROOM1_X_RANGE)
             player2 = move_player(player2, dx, dy, ROOM2_X_RANGE)
 
@@ -294,5 +310,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-    #tadaaaa..
