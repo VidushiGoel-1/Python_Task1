@@ -8,20 +8,22 @@ screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Split Control")
 clock = pygame.time.Clock()
 
-# Colors
+# Colours
 BG_COLOR = (20, 20, 30)
 PLAYER1_COLOR = (80, 200, 255)     # left room character
 PLAYER2_COLOR = (255, 150, 80)     # right room character
 OBSTACLE_COLOR = (200, 60, 60)
-EXIT_COLOR = (80, 255, 120)
 DIVIDER_COLOR = (60, 60, 70)
 
 SPEED = 4
 score = 0
+lives = 5
+INVINCIBLE_FRAMES = 90
+invincible_timer = 0
 font = pygame.font.SysFont(None, 36)
 
 # Two separate "rooms" side by side on the same screen
-# Left half = room 1, right half = room 2..
+# Left half = room 1, right half = room 2
 ROOM1_X_RANGE = (0, WIDTH // 2 - 5)
 ROOM2_X_RANGE = (WIDTH // 2 + 5, WIDTH)
 
@@ -40,27 +42,23 @@ obstacles2 = [
     [pygame.Rect(WIDTH // 2 + 300, 350, 150, 20), -3, 0],
 ]
 
-# Exit rects - both players must reach their exit at the same time (same move)
-exit1 = pygame.Rect(ROOM1_X_RANGE[1] - 60, HEIGHT - 70, 40, 40)
-exit2 = pygame.Rect(ROOM2_X_RANGE[1] - 60, HEIGHT - 70, 40, 40)
 
-
-def move_player(rect, dx, dy, obstacles, x_bounds):
+def move_player(rect, dx, dy, x_bounds):
     new_rect = rect.move(dx, dy)
 
-    # Clamp to this player's room (so they can't wander into the other room)
     new_rect.left = max(x_bounds[0], new_rect.left)
     new_rect.right = min(x_bounds[1], new_rect.right)
     new_rect.top = max(0, new_rect.top)
     new_rect.bottom = min(HEIGHT, new_rect.bottom)
 
-    # Block on obstacles - if colliding, cancel this move
-    # obstacles is a list of [rect, dx, dy] - only the rect (index 0) matters here
-    for obs_data in obstacles:
-        if new_rect.colliderect(obs_data[0]):
-            return rect  # movement rejected, stay in place
-
     return new_rect
+
+
+def check_collision(rect, obstacles):
+    for obs_data in obstacles:
+        if rect.colliderect(obs_data[0]):
+            return True
+    return False
 
 
 def update_obstacles(obstacles, x_bounds):
@@ -81,44 +79,78 @@ def draw_room_divider():
     pygame.draw.line(screen, DIVIDER_COLOR, (WIDTH // 2, 0), (WIDTH // 2, HEIGHT), 3)
 
 
-def draw_everything(win, score):
+def draw_everything(game_over, score, lives):
     screen.fill(BG_COLOR)
     draw_room_divider()
 
     score_text = font.render(f"Score: {score}", True, (255, 255, 255))
     screen.blit(score_text, (10, 10))
 
+    lives_text = font.render(f"Lives: {lives}", True, (255, 255, 255))
+    screen.blit(lives_text, (10, 45))
+
     for obs_data in obstacles1:
         pygame.draw.rect(screen, OBSTACLE_COLOR, obs_data[0])
     for obs_data in obstacles2:
         pygame.draw.rect(screen, OBSTACLE_COLOR, obs_data[0])
 
-    pygame.draw.rect(screen, EXIT_COLOR, exit1)
-    pygame.draw.rect(screen, EXIT_COLOR, exit2)
-
     pygame.draw.rect(screen, PLAYER1_COLOR, player1)
     pygame.draw.rect(screen, PLAYER2_COLOR, player2)
 
-    if win:
-        win_font = pygame.font.SysFont(None, 60)
-        text = win_font.render("BOTH REACHED THE EXIT!", True, (255, 255, 255))
-        screen.blit(text, (WIDTH // 2 - text.get_width() // 2, HEIGHT // 2 - 30))
+    if game_over:
+        over_font = pygame.font.SysFont(None, 60)
+        text = over_font.render("GAME OVER", True, (255, 255, 255))
+        screen.blit(text, (WIDTH // 2 - text.get_width() // 2, HEIGHT // 2 - 60))
+
+        sub_font = pygame.font.SysFont(None, 36)
+        sub_text = sub_font.render(f"Score: {score}  -  Press R to Restart", True, (255, 255, 255))
+        screen.blit(sub_text, (WIDTH // 2 - sub_text.get_width() // 2, HEIGHT // 2))
 
     pygame.display.update()
 
 
+def reset_game():
+    global player1, player2, obstacles1, obstacles2, score, lives, invincible_timer
+    player1 = pygame.Rect(50, 50, 40, 40)
+    player2 = pygame.Rect(WIDTH // 2 + 50, 50, 40, 40)
+    obstacles1 = [
+        [pygame.Rect(150, 150, 120, 20), 3, 0],
+        [pygame.Rect(100, 300, 20, 120), 0, 2],
+    ]
+    obstacles2 = [
+        [pygame.Rect(WIDTH // 2 + 200, 100, 20, 150), 0, -2],
+        [pygame.Rect(WIDTH // 2 + 300, 350, 150, 20), -3, 0],
+    ]
+    score = 0
+    lives = 5
+    invincible_timer = 0
+
+
+def reset_positions():
+    global player1, player2, invincible_timer
+    player1 = pygame.Rect(50, 50, 40, 40)
+    player2 = pygame.Rect(WIDTH // 2 + 50, 50, 40, 40)
+    invincible_timer = INVINCIBLE_FRAMES
+
+
 def main():
-    global player1, player2, score
+    global player1, player2, score, lives, invincible_timer
     running = True
-    won = False
+    game_over = False
 
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            if event.type == pygame.KEYDOWN and game_over:
+                if event.key == pygame.K_r:
+                    reset_game()
+                    game_over = False
 
-        if not won:
+        if not game_over:
             score += 1
+            if invincible_timer > 0:
+                invincible_timer -= 1
 
             # Obstacles drift and bounce on their own, every frame
             update_obstacles(obstacles1, ROOM1_X_RANGE)
@@ -136,13 +168,19 @@ def main():
                 dy = SPEED
 
             # SAME input applied to BOTH players - this is the core mechanic
-            player1 = move_player(player1, dx, dy, obstacles1, ROOM1_X_RANGE)
-            player2 = move_player(player2, dx, dy, obstacles2, ROOM2_X_RANGE)
+            player1 = move_player(player1, dx, dy, ROOM1_X_RANGE)
+            player2 = move_player(player2, dx, dy, ROOM2_X_RANGE)
 
-            if player1.colliderect(exit1) and player2.colliderect(exit2):
-                won = True
+            if invincible_timer == 0 and (
+                check_collision(player1, obstacles1) or check_collision(player2, obstacles2)
+            ):
+                lives -= 1
+                if lives <= 0:
+                    game_over = True
+                else:
+                    reset_positions()
 
-        draw_everything(won, score)
+        draw_everything(game_over, score, lives)
         clock.tick(60)
 
     pygame.quit()
