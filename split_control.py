@@ -44,7 +44,6 @@ exit2 = pygame.Rect(ROOM2_X_RANGE[1] - 60, HEIGHT - 70, 40, 40)
 
 
 def move_player(rect, dx, dy, obstacles, x_bounds):
-    """Move a player rect by (dx, dy), blocking on obstacles and room bounds."""
     new_rect = rect.move(dx, dy)
 
     # Clamp to this player's room (so they can't wander into the other room)
@@ -63,7 +62,6 @@ def move_player(rect, dx, dy, obstacles, x_bounds):
 
 
 def update_obstacles(obstacles, x_bounds):
-    """Move each obstacle by its own (dx, dy) and bounce it off room edges."""
     for obs_data in obstacles:
         rect, dx, dy = obs_data
         rect.x += dx
