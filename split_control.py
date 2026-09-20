@@ -20,6 +20,8 @@ score = 0
 lives = 5
 INVINCIBLE_FRAMES = 90
 invincible_timer = 0
+DIFFICULTY_STEP = 50
+next_difficulty_score = DIFFICULTY_STEP
 font = pygame.font.SysFont(None, 36)
 
 # Two separate "rooms" side by side on the same screen
@@ -61,7 +63,17 @@ def check_collision(rect, obstacles):
     return False
 
 
+def add_obstacle(obstacles, x_bounds):
+    import random
+    x = random.randint(x_bounds[0] + 20, x_bounds[1] - 40)
+    y = random.randint(20, HEIGHT - 40)
+    dx = random.choice([-3, -2, 2, 3])
+    dy = random.choice([-3, -2, 2, 3])
+    obstacles.append([pygame.Rect(x, y, 60, 20), dx, dy])
+
+
 def update_obstacles(obstacles, x_bounds):
+    """Move each obstacle by its own (dx, dy) and bounce it off room edges."""
     for obs_data in obstacles:
         rect, dx, dy = obs_data
         rect.x += dx
@@ -110,7 +122,7 @@ def draw_everything(game_over, score, lives):
 
 
 def reset_game():
-    global player1, player2, obstacles1, obstacles2, score, lives, invincible_timer
+    global player1, player2, obstacles1, obstacles2, score, lives, invincible_timer, next_difficulty_score
     player1 = pygame.Rect(50, 50, 40, 40)
     player2 = pygame.Rect(WIDTH // 2 + 50, 50, 40, 40)
     obstacles1 = [
@@ -124,6 +136,7 @@ def reset_game():
     score = 0
     lives = 5
     invincible_timer = 0
+    next_difficulty_score = DIFFICULTY_STEP
 
 
 def reset_positions():
@@ -134,7 +147,7 @@ def reset_positions():
 
 
 def main():
-    global player1, player2, score, lives, invincible_timer
+    global player1, player2, score, lives, invincible_timer, next_difficulty_score
     running = True
     game_over = False
 
@@ -148,7 +161,6 @@ def main():
                     game_over = False
 
         if not game_over:
-            score += 1
             if invincible_timer > 0:
                 invincible_timer -= 1
 
@@ -166,6 +178,14 @@ def main():
                 dy = -SPEED
             if keys[pygame.K_DOWN]:
                 dy = SPEED
+
+            if dx != 0 or dy != 0:
+                score += 1
+
+            if score >= next_difficulty_score:
+                add_obstacle(obstacles1, ROOM1_X_RANGE)
+                add_obstacle(obstacles2, ROOM2_X_RANGE)
+                next_difficulty_score += DIFFICULTY_STEP
 
             # SAME input applied to BOTH players - this is the core mechanic
             player1 = move_player(player1, dx, dy, ROOM1_X_RANGE)
