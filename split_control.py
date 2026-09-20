@@ -9,10 +9,9 @@ screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Split Control")
 clock = pygame.time.Clock()
 
-# ---------------------------------------------------------------------------
+# 
 # Colors
-# ---------------------------------------------------------------------------
-BG_COLOR = (20, 20, 30)
+# 
 DIVIDER_COLOR = (60, 60, 70)
 
 SPEED = 4
@@ -24,6 +23,9 @@ DIFFICULTY_STEP = 50
 next_difficulty_score = DIFFICULTY_STEP
 MAX_OBSTACLES = 6
 SAFE_SPAWN_DISTANCE = 100
+player1_frame_index = 0
+player2_frame_index = 0
+animation_timer = 0
 font = pygame.font.SysFont(None, 36)
 
 # ---------------------------------------------------------------------------
@@ -35,16 +37,58 @@ player1_img = pygame.transform.scale(
 player2_img = pygame.transform.scale(
     pygame.image.load("assets/player2.png").convert_alpha(), (40, 40)
 )
+
+
+def slice_sprite_sheet(path, frame_size):
+    sheet = pygame.image.load(path).convert_alpha()
+    width, height = sheet.get_size()
+
+    # Scan columns for any non-transparent pixel to find content ranges
+    col_has_content = []
+    for x in range(width):
+        has_content = False
+        for y in range(0, height, 4):  # sample every 4th pixel for speed
+            if sheet.get_at((x, y))[3] > 10:  # alpha > 10 = visible
+                has_content = True
+                break
+        col_has_content.append(has_content)
+
+    ranges = []
+    in_content = False
+    start = 0
+    for x, has in enumerate(col_has_content):
+        if has and not in_content:
+            start = x
+            in_content = True
+        elif not has and in_content:
+            ranges.append((start, x))
+            in_content = False
+    if in_content:
+        ranges.append((start, width))
+
+    frames = []
+    for start, end in ranges:
+        frame_surface = sheet.subsurface((start, 0, end - start, height))
+        frame_surface = pygame.transform.scale(frame_surface, frame_size)
+        frames.append(frame_surface)
+    return frames
+
+
+player1_frames = slice_sprite_sheet("assets/player1_sheet.png", (40, 40))
+player2_frames = slice_sprite_sheet("assets/player2_sheet.png", (40, 40))
+ANIMATION_SPEED = 8  # lower = faster animation
+
 obstacle_images = [
     pygame.transform.scale(pygame.image.load("assets/obstacle1.png").convert_alpha(), (60, 40)),
     pygame.transform.scale(pygame.image.load("assets/obstacle2.png").convert_alpha(), (60, 40)),
     pygame.transform.scale(pygame.image.load("assets/obstacle3.png").convert_alpha(), (60, 40)),
 ]
+background_img = pygame.transform.scale(
+    pygame.image.load("assets/background.png").convert(), (WIDTH, HEIGHT)
+)
 
-# ---------------------------------------------------------------------------
 # Two separate "rooms" side by side on the same screen
 # Left half = room 1, right half = room 2
-# ---------------------------------------------------------------------------
 ROOM1_X_RANGE = (0, WIDTH // 2 - 5)
 ROOM2_X_RANGE = (WIDTH // 2 + 5, WIDTH)
 
@@ -52,7 +96,6 @@ player1 = pygame.Rect(50, 50, 40, 40)
 player2 = pygame.Rect(WIDTH // 2 + 50, 50, 40, 40)
 
 # Obstacles are DIFFERENT in each room -> forces a path that works for both
-# Each entry is [rect, dx, dy, image] so obstacles can move, bounce, and draw their own art
 obstacles1 = [
     [pygame.Rect(150, 150, 60, 40), 3, 0, obstacle_images[0]],
     [pygame.Rect(100, 300, 60, 40), 0, 2, obstacle_images[1]],
@@ -102,7 +145,6 @@ def add_obstacle(obstacles, x_bounds, player_rect):
 
 
 def update_obstacles(obstacles, x_bounds):
-    """Move each obstacle by its own (dx, dy) and bounce it off room edges."""
     for obs_data in obstacles:
         rect, dx, dy = obs_data[0], obs_data[1], obs_data[2]
         rect.x += dx
@@ -121,7 +163,7 @@ def draw_room_divider():
 
 
 def draw_everything(game_over, score, lives):
-    screen.fill(BG_COLOR)
+    screen.blit(background_img, (0, 0))
     draw_room_divider()
 
     score_text = font.render(f"Score: {score}", True, (255, 255, 255))
@@ -135,8 +177,8 @@ def draw_everything(game_over, score, lives):
     for obs_data in obstacles2:
         screen.blit(obs_data[3], obs_data[0])
 
-    screen.blit(player1_img, player1)
-    screen.blit(player2_img, player2)
+    screen.blit(player1_frames[player1_frame_index], player1)
+    screen.blit(player2_frames[player2_frame_index], player2)
 
     if game_over:
         over_font = pygame.font.SysFont(None, 60)
@@ -152,6 +194,7 @@ def draw_everything(game_over, score, lives):
 
 def reset_game():
     global player1, player2, obstacles1, obstacles2, score, lives, invincible_timer, next_difficulty_score
+    global player1_frame_index, player2_frame_index, animation_timer
     player1 = pygame.Rect(50, 50, 40, 40)
     player2 = pygame.Rect(WIDTH // 2 + 50, 50, 40, 40)
     obstacles1 = [
@@ -166,6 +209,9 @@ def reset_game():
     lives = 5
     invincible_timer = 0
     next_difficulty_score = DIFFICULTY_STEP
+    player1_frame_index = 0
+    player2_frame_index = 0
+    animation_timer = 0
 
 
 def reset_positions():
@@ -177,6 +223,7 @@ def reset_positions():
 
 def main():
     global player1, player2, score, lives, invincible_timer, next_difficulty_score
+    global player1_frame_index, player2_frame_index, animation_timer
     running = True
     game_over = False
 
@@ -210,13 +257,22 @@ def main():
 
             if dx != 0 or dy != 0:
                 score += 1
+                animation_timer += 1
+                if animation_timer >= ANIMATION_SPEED:
+                    animation_timer = 0
+                    player1_frame_index = (player1_frame_index + 1) % len(player1_frames)
+                    player2_frame_index = (player2_frame_index + 1) % len(player2_frames)
+            else:
+                player1_frame_index = 0
+                player2_frame_index = 0
+                animation_timer = 0
 
             if score >= next_difficulty_score:
                 add_obstacle(obstacles1, ROOM1_X_RANGE, player1)
                 add_obstacle(obstacles2, ROOM2_X_RANGE, player2)
                 next_difficulty_score += DIFFICULTY_STEP
 
-            # SAME input applied to BOTH players - this is the core mechanic
+            # SAME input applied to BOTH players - this is the core mechanic...
             player1 = move_player(player1, dx, dy, ROOM1_X_RANGE)
             player2 = move_player(player2, dx, dy, ROOM2_X_RANGE)
 
@@ -238,3 +294,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+    #tadaaaa..
