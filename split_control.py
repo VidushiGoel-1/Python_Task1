@@ -17,16 +17,18 @@ EXIT_COLOR = (80, 255, 120)
 DIVIDER_COLOR = (60, 60, 70)
 
 SPEED = 4
+score = 0
+font = pygame.font.SysFont(None, 36)
 
 # Two separate "rooms" side by side on the same screen
-# Left half = room 1, right half = room 2
+# Left half = room 1, right half = room 2..
 ROOM1_X_RANGE = (0, WIDTH // 2 - 5)
 ROOM2_X_RANGE = (WIDTH // 2 + 5, WIDTH)
 
 player1 = pygame.Rect(50, 50, 40, 40)
 player2 = pygame.Rect(WIDTH // 2 + 50, 50, 40, 40)
 
-# Obstacle are DIFFERENT in each room -> forces a path that works for both
+# Obstacles are DIFFERENT in each room -> forces a path that works for both
 # Each entry is [rect, dx, dy] so obstacles can move and bounce off walls
 obstacles1 = [
     [pygame.Rect(150, 150, 120, 20), 3, 0],
@@ -44,7 +46,6 @@ exit2 = pygame.Rect(ROOM2_X_RANGE[1] - 60, HEIGHT - 70, 40, 40)
 
 
 def move_player(rect, dx, dy, obstacles, x_bounds):
-    """Move a player rect by (dx, dy), blocking on obstacles and room bounds."""
     new_rect = rect.move(dx, dy)
 
     # Clamp to this player's room (so they can't wander into the other room)
@@ -63,7 +64,6 @@ def move_player(rect, dx, dy, obstacles, x_bounds):
 
 
 def update_obstacles(obstacles, x_bounds):
-    """Move each obstacle by its own (dx, dy) and bounce it off room edges."""
     for obs_data in obstacles:
         rect, dx, dy = obs_data
         rect.x += dx
@@ -81,9 +81,12 @@ def draw_room_divider():
     pygame.draw.line(screen, DIVIDER_COLOR, (WIDTH // 2, 0), (WIDTH // 2, HEIGHT), 3)
 
 
-def draw_everything(win):
+def draw_everything(win, score):
     screen.fill(BG_COLOR)
     draw_room_divider()
+
+    score_text = font.render(f"Score: {score}", True, (255, 255, 255))
+    screen.blit(score_text, (10, 10))
 
     for obs_data in obstacles1:
         pygame.draw.rect(screen, OBSTACLE_COLOR, obs_data[0])
@@ -97,15 +100,15 @@ def draw_everything(win):
     pygame.draw.rect(screen, PLAYER2_COLOR, player2)
 
     if win:
-        font = pygame.font.SysFont(None, 60)
-        text = font.render("BOTH REACHED THE EXIT!", True, (255, 255, 255))
+        win_font = pygame.font.SysFont(None, 60)
+        text = win_font.render("BOTH REACHED THE EXIT!", True, (255, 255, 255))
         screen.blit(text, (WIDTH // 2 - text.get_width() // 2, HEIGHT // 2 - 30))
 
     pygame.display.update()
 
 
 def main():
-    global player1, player2
+    global player1, player2, score
     running = True
     won = False
 
@@ -115,6 +118,8 @@ def main():
                 running = False
 
         if not won:
+            score += 1
+
             # Obstacles drift and bounce on their own, every frame
             update_obstacles(obstacles1, ROOM1_X_RANGE)
             update_obstacles(obstacles2, ROOM2_X_RANGE)
@@ -137,7 +142,7 @@ def main():
             if player1.colliderect(exit1) and player2.colliderect(exit2):
                 won = True
 
-        draw_everything(won)
+        draw_everything(won, score)
         clock.tick(60)
 
     pygame.quit()
