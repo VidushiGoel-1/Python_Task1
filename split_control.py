@@ -25,9 +25,8 @@ player1_frame_index = 0
 player2_frame_index = 0
 animation_timer = 0
 font = pygame.font.SysFont(None, 36)
- 
-# Load images
 
+# Load images
 player1_img = pygame.transform.scale(
     pygame.image.load("assets/player1.png").convert_alpha(), (40, 40)
 )
@@ -37,6 +36,7 @@ player2_img = pygame.transform.scale(
 
 
 def get_content_bounds(surface):
+    """Union of all opaque regions in a surface - the true visible bounding box."""
     mask = pygame.mask.from_surface(surface)
     rects = mask.get_bounding_rects()
     if not rects:
@@ -112,7 +112,6 @@ player1 = pygame.Rect(50, 50, 50, 50)
 player2 = pygame.Rect(WIDTH // 2 + 50, 50, 50, 50)
 
 # Obstacles are DIFFERENT in each room -> forces a path that works for both
-# Each entry is [rect, dx, dy, image] so obstacles can move, bounce, and draw their own art
 obstacles1 = [
     [pygame.Rect(150, 150, 60, 40), 1, 0, obstacle_images[0]],
     [pygame.Rect(100, 300, 60, 40), 0, 1, obstacle_images[1]],
@@ -125,7 +124,7 @@ obstacles2 = [
 
 
 def move_player(rect, dx, dy, x_bounds):
-
+    """Move a player rect by (dx, dy), clamped to its room bounds."""
     new_rect = rect.move(dx, dy)
 
     new_rect.left = max(x_bounds[0], new_rect.left)
@@ -176,6 +175,29 @@ def update_obstacles(obstacles, x_bounds):
 
 def draw_room_divider():
     pygame.draw.line(screen, DIVIDER_COLOR, (WIDTH // 2, 0), (WIDTH // 2, HEIGHT), 3)
+
+
+def draw_start_screen():
+    screen.blit(background_img, (0, 0))
+    draw_room_divider()
+
+    title_font = pygame.font.SysFont(None, 64)
+    title_text = title_font.render("SPLIT CONTROL", True, (255, 255, 255))
+    screen.blit(title_text, (WIDTH // 2 - title_text.get_width() // 2, 100))
+
+    line_font = pygame.font.SysFont(None, 32)
+    lines = [
+        "Arrow keys move BOTH wizards at once.",
+        "Each room has different obstacles - find a path that works for both!",
+        "Avoid obstacles, survive as long as you can, score climbs as you move.",
+        "",
+        "Press any key to start",
+    ]
+    for i, line in enumerate(lines):
+        line_text = line_font.render(line, True, (230, 230, 230))
+        screen.blit(line_text, (WIDTH // 2 - line_text.get_width() // 2, 200 + i * 35))
+
+    pygame.display.update()
 
 
 def draw_everything(game_over, score, lives):
@@ -242,21 +264,28 @@ def main():
     global player1_frame_index, player2_frame_index, animation_timer
     running = True
     game_over = False
+    game_started = False
 
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            if event.type == pygame.KEYDOWN and not game_started:
+                game_started = True
             if event.type == pygame.KEYDOWN and game_over:
                 if event.key == pygame.K_r:
                     reset_game()
                     game_over = False
 
+        if not game_started:
+            draw_start_screen()
+            clock.tick(60)
+            continue
+
         if not game_over:
             if invincible_timer > 0:
                 invincible_timer -= 1
 
-            # Obstacles drift and bounce on their own, every frame
             update_obstacles(obstacles1, ROOM1_X_RANGE)
             update_obstacles(obstacles2, ROOM2_X_RANGE)
 
