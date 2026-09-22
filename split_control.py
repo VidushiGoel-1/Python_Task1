@@ -1,15 +1,17 @@
 import pygame
 import random
 import sys
+import numpy as np
 
 pygame.init()
+pygame.mixer.init()
 
 WIDTH, HEIGHT = 900, 500
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Split Control")
 clock = pygame.time.Clock()
 
-# Colors
+# Colours
 DIVIDER_COLOR = (60, 60, 70)
 
 SPEED = 4
@@ -48,6 +50,12 @@ def get_content_bounds(surface):
 
 
 def slice_sprite_sheet(path, frame_size):
+    """
+    Auto-detect frame boundaries in a sprite sheet by finding transparent
+    gaps between characters, then TIGHTLY crop each frame to its actual
+    visible pixels before scaling. This avoids a small floating character
+    inside a mostly-empty box caused by leftover transparent padding.
+    """
     sheet = pygame.image.load(path).convert_alpha()
     width, height = sheet.get_size()
 
@@ -103,6 +111,26 @@ background_img = pygame.transform.scale(
     pygame.image.load("assets/background.png").convert(), (WIDTH, HEIGHT)
 )
 
+# Sound effects
+def make_beep(frequency=440, duration_ms=150, volume=0.3):
+    """Generate a simple sine-wave beep in code - no sound file needed."""
+    sample_rate = 44100
+    n_samples = int(sample_rate * duration_ms / 1000)
+    t = np.linspace(0, duration_ms / 1000, n_samples, False)
+    wave = np.sin(frequency * t * 2 * np.pi)
+    audio = (wave * 32767 * volume).astype(np.int16)
+    stereo = np.column_stack((audio, audio))
+    return pygame.sndarray.make_sound(stereo)
+
+
+hit_sound = make_beep(frequency=180, duration_ms=120, volume=0.4)
+gameover_sound = pygame.mixer.Sound("assets/gameover.mp3")
+levelup_sound = pygame.mixer.Sound("assets/levelup.mp3")
+
+pygame.mixer.music.load("assets/background_music.mp3")
+pygame.mixer.music.set_volume(0.4)
+pygame.mixer.music.play(-1)  # -1 = loop forever
+
 # Two separate "rooms" side by side on the same screen
 # Left half = room 1, right half = room 2
 ROOM1_X_RANGE = (0, WIDTH // 2 - 5)
@@ -112,6 +140,7 @@ player1 = pygame.Rect(50, 50, 50, 50)
 player2 = pygame.Rect(WIDTH // 2 + 50, 50, 50, 50)
 
 # Obstacles are DIFFERENT in each room -> forces a path that works for both
+# Each entry is [rect, dx, dy, image] so obstacles can move, bounce, and draw their own art
 obstacles1 = [
     [pygame.Rect(150, 150, 60, 40), 1, 0, obstacle_images[0]],
     [pygame.Rect(100, 300, 60, 40), 0, 1, obstacle_images[1]],
@@ -124,7 +153,6 @@ obstacles2 = [
 
 
 def move_player(rect, dx, dy, x_bounds):
-    """Move a player rect by (dx, dy), clamped to its room bounds."""
     new_rect = rect.move(dx, dy)
 
     new_rect.left = max(x_bounds[0], new_rect.left)
@@ -286,6 +314,7 @@ def main():
             if invincible_timer > 0:
                 invincible_timer -= 1
 
+            # Obstacles drift and bounce on their own, every frame
             update_obstacles(obstacles1, ROOM1_X_RANGE)
             update_obstacles(obstacles2, ROOM2_X_RANGE)
 
@@ -316,6 +345,7 @@ def main():
                 add_obstacle(obstacles1, ROOM1_X_RANGE, player1)
                 add_obstacle(obstacles2, ROOM2_X_RANGE, player2)
                 next_difficulty_score += DIFFICULTY_STEP
+                levelup_sound.play()
 
             # SAME input applied to BOTH players - this is the core mechanic
             player1 = move_player(player1, dx, dy, ROOM1_X_RANGE)
@@ -324,9 +354,11 @@ def main():
             if invincible_timer == 0 and (
                 check_collision(player1, obstacles1) or check_collision(player2, obstacles2)
             ):
+                hit_sound.play()
                 lives -= 1
                 if lives <= 0:
                     game_over = True
+                    gameover_sound.play()
                 else:
                     reset_positions()
 
@@ -339,3 +371,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# tadaaa...
