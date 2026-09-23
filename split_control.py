@@ -11,7 +11,9 @@ screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Split Control")
 clock = pygame.time.Clock()
 
-# Colours
+# ---------------------------------------------------------------------------
+# Colors
+# ---------------------------------------------------------------------------
 DIVIDER_COLOR = (60, 60, 70)
 
 SPEED = 4
@@ -26,9 +28,31 @@ SAFE_SPAWN_DISTANCE = 100
 player1_frame_index = 0
 player2_frame_index = 0
 animation_timer = 0
+
+HIGH_SCORE_FILE = "high_score.txt"
+
+
+def load_high_score():
+    """Read the saved best score from disk. Returns 0 if the file doesn't exist yet."""
+    try:
+        with open(HIGH_SCORE_FILE, "r") as f:
+            return int(f.read().strip())
+    except (FileNotFoundError, ValueError):
+        return 0
+
+
+def save_high_score(value):
+    """Write the best score to disk so it persists after closing the game."""
+    with open(HIGH_SCORE_FILE, "w") as f:
+        f.write(str(value))
+
+
+high_score = load_high_score()
 font = pygame.font.SysFont(None, 36)
 
+# ---------------------------------------------------------------------------
 # Load images
+# ---------------------------------------------------------------------------
 player1_img = pygame.transform.scale(
     pygame.image.load("assets/player1.png").convert_alpha(), (40, 40)
 )
@@ -92,6 +116,7 @@ def slice_sprite_sheet(path, frame_size):
 
 
 def load_image_cropped(path, size):
+    """Load an image and tightly crop it to its visible (non-transparent) content before scaling."""
     img = pygame.image.load(path).convert_alpha()
     bounds = get_content_bounds(img)
     cropped = img.subsurface(bounds)
@@ -111,7 +136,9 @@ background_img = pygame.transform.scale(
     pygame.image.load("assets/background.png").convert(), (WIDTH, HEIGHT)
 )
 
+# ---------------------------------------------------------------------------
 # Sound effects
+# ---------------------------------------------------------------------------
 def make_beep(frequency=440, duration_ms=150, volume=0.3):
     """Generate a simple sine-wave beep in code - no sound file needed."""
     sample_rate = 44100
@@ -131,13 +158,15 @@ pygame.mixer.music.load("assets/background_music.mp3")
 pygame.mixer.music.set_volume(0.4)
 pygame.mixer.music.play(-1)  # -1 = loop forever
 
+# ---------------------------------------------------------------------------
 # Two separate "rooms" side by side on the same screen
 # Left half = room 1, right half = room 2
+# ---------------------------------------------------------------------------
 ROOM1_X_RANGE = (0, WIDTH // 2 - 5)
 ROOM2_X_RANGE = (WIDTH // 2 + 5, WIDTH)
 
-player1 = pygame.Rect(50, 50, 50, 50)
-player2 = pygame.Rect(WIDTH // 2 + 50, 50, 50, 50)
+player1 = pygame.Rect(50, 120, 50, 50)
+player2 = pygame.Rect(WIDTH // 2 + 50, 120, 50, 50)
 
 # Obstacles are DIFFERENT in each room -> forces a path that works for both
 # Each entry is [rect, dx, dy, image] so obstacles can move, bounce, and draw their own art
@@ -153,6 +182,7 @@ obstacles2 = [
 
 
 def move_player(rect, dx, dy, x_bounds):
+    """Move a player rect by (dx, dy), clamped to its room bounds."""
     new_rect = rect.move(dx, dy)
 
     new_rect.left = max(x_bounds[0], new_rect.left)
@@ -171,6 +201,7 @@ def check_collision(rect, obstacles):
 
 
 def add_obstacle(obstacles, x_bounds, player_rect):
+    """Add one new obstacle, capped at MAX_OBSTACLES, spawned away from the player."""
     if len(obstacles) >= MAX_OBSTACLES:
         return
 
@@ -188,6 +219,7 @@ def add_obstacle(obstacles, x_bounds, player_rect):
 
 
 def update_obstacles(obstacles, x_bounds):
+    """Move each obstacle by its own (dx, dy) and bounce it off room edges."""
     for obs_data in obstacles:
         rect, dx, dy = obs_data[0], obs_data[1], obs_data[2]
         rect.x += dx
@@ -215,6 +247,8 @@ def draw_start_screen():
 
     line_font = pygame.font.SysFont(None, 32)
     lines = [
+        f"Best Score: {high_score}",
+        "",
         "Arrow keys move BOTH wizards at once.",
         "Each room has different obstacles - find a path that works for both!",
         "Avoid obstacles, survive as long as you can, score climbs as you move.",
@@ -238,6 +272,9 @@ def draw_everything(game_over, score, lives):
     lives_text = font.render(f"Lives: {lives}", True, (255, 255, 255))
     screen.blit(lives_text, (10, 45))
 
+    high_score_text = font.render(f"Best: {high_score}", True, (255, 255, 255))
+    screen.blit(high_score_text, (10, 80))
+
     for obs_data in obstacles1:
         screen.blit(obs_data[3], obs_data[0])
     for obs_data in obstacles2:
@@ -252,7 +289,7 @@ def draw_everything(game_over, score, lives):
         screen.blit(text, (WIDTH // 2 - text.get_width() // 2, HEIGHT // 2 - 60))
 
         sub_font = pygame.font.SysFont(None, 36)
-        sub_text = sub_font.render(f"Score: {score}  -  Press R to Restart", True, (255, 255, 255))
+        sub_text = sub_font.render(f"Score: {score}  -  Best: {high_score}  -  Press R to Restart", True, (255, 255, 255))
         screen.blit(sub_text, (WIDTH // 2 - sub_text.get_width() // 2, HEIGHT // 2))
 
     pygame.display.update()
@@ -261,8 +298,8 @@ def draw_everything(game_over, score, lives):
 def reset_game():
     global player1, player2, obstacles1, obstacles2, score, lives, invincible_timer, next_difficulty_score
     global player1_frame_index, player2_frame_index, animation_timer
-    player1 = pygame.Rect(50, 50, 50, 50)
-    player2 = pygame.Rect(WIDTH // 2 + 50, 50, 50, 50)
+    player1 = pygame.Rect(50, 120, 50, 50)
+    player2 = pygame.Rect(WIDTH // 2 + 50, 120, 50, 50)
     obstacles1 = [
         [pygame.Rect(150, 150, 60, 40), 1, 0, obstacle_images[0]],
         [pygame.Rect(100, 300, 60, 40), 0, 1, obstacle_images[1]],
@@ -282,13 +319,13 @@ def reset_game():
 
 def reset_positions():
     global player1, player2, invincible_timer
-    player1 = pygame.Rect(50, 50, 50, 50)
-    player2 = pygame.Rect(WIDTH // 2 + 50, 50, 50, 50)
+    player1 = pygame.Rect(50, 120, 50, 50)
+    player2 = pygame.Rect(WIDTH // 2 + 50, 120, 50, 50)
     invincible_timer = INVINCIBLE_FRAMES
 
 
 def main():
-    global player1, player2, score, lives, invincible_timer, next_difficulty_score
+    global player1, player2, score, lives, invincible_timer, next_difficulty_score, high_score
     global player1_frame_index, player2_frame_index, animation_timer
     running = True
     game_over = False
@@ -359,6 +396,9 @@ def main():
                 if lives <= 0:
                     game_over = True
                     gameover_sound.play()
+                    if score > high_score:
+                        high_score = score
+                        save_high_score(high_score)
                 else:
                     reset_positions()
 
@@ -371,5 +411,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# tadaaa...
