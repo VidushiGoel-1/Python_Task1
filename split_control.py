@@ -1,19 +1,28 @@
 import pygame
-import random
-import sys
-import numpy as np
+import random # python's in-built randomness tool..jisse obstacles ki position/speed different ho every time!..
+import sys #program ko cleanly exit kne ke liye
+import os # file paths handle krne ke liye
+import numpy as np  # For producing HIT sound..
 
 pygame.init()
 pygame.mixer.init()
 
+
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+# Important concept: coordinate system. Pygame mein (0, 0) top-left corner hota hai, math graph jaisa bottom-left nahi. X right ki taraf badhta hai, Y neeche ki taraf badhta hai. Toh (450, 250) tumhare 900×500 window ka roughly center hai.
 WIDTH, HEIGHT = 900, 500
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Split Control")
 clock = pygame.time.Clock()
 
-# ---------------------------------------------------------------------------
-# Colors
-# ---------------------------------------------------------------------------
+# Colours
+# Pygame mein colors sirf 3 numbers ka tuple hote hain: (Red, Green, Blue), har ek 0 se 255 tak. (60, 60, 70) ek dark bluish-gray hai. (255, 255, 255) pure white hai, (0, 0, 0) pure black.
 DIVIDER_COLOR = (60, 60, 70)
 
 SPEED = 4
@@ -33,7 +42,6 @@ HIGH_SCORE_FILE = "high_score.txt"
 
 
 def load_high_score():
-    """Read the saved best score from disk. Returns 0 if the file doesn't exist yet."""
     try:
         with open(HIGH_SCORE_FILE, "r") as f:
             return int(f.read().strip())
@@ -42,7 +50,6 @@ def load_high_score():
 
 
 def save_high_score(value):
-    """Write the best score to disk so it persists after closing the game."""
     with open(HIGH_SCORE_FILE, "w") as f:
         f.write(str(value))
 
@@ -50,14 +57,12 @@ def save_high_score(value):
 high_score = load_high_score()
 font = pygame.font.SysFont(None, 36)
 
-# ---------------------------------------------------------------------------
 # Load images
-# ---------------------------------------------------------------------------
 player1_img = pygame.transform.scale(
-    pygame.image.load("assets/player1.png").convert_alpha(), (40, 40)
+    pygame.image.load(resource_path("assets/player1.png")).convert_alpha(), (40, 40)
 )
 player2_img = pygame.transform.scale(
-    pygame.image.load("assets/player2.png").convert_alpha(), (40, 40)
+    pygame.image.load(resource_path("assets/player2.png")).convert_alpha(), (40, 40)
 )
 
 
@@ -74,13 +79,7 @@ def get_content_bounds(surface):
 
 
 def slice_sprite_sheet(path, frame_size):
-    """
-    Auto-detect frame boundaries in a sprite sheet by finding transparent
-    gaps between characters, then TIGHTLY crop each frame to its actual
-    visible pixels before scaling. This avoids a small floating character
-    inside a mostly-empty box caused by leftover transparent padding.
-    """
-    sheet = pygame.image.load(path).convert_alpha()
+    sheet = pygame.image.load(path).convert_alpha()  # .convert_alpha()transparency preserve krta h..
     width, height = sheet.get_size()
 
     col_has_content = []
@@ -116,29 +115,32 @@ def slice_sprite_sheet(path, frame_size):
 
 
 def load_image_cropped(path, size):
-    """Load an image and tightly crop it to its visible (non-transparent) content before scaling."""
     img = pygame.image.load(path).convert_alpha()
     bounds = get_content_bounds(img)
     cropped = img.subsurface(bounds)
-    return pygame.transform.scale(cropped, size)
+    return pygame.transform.scale(cropped, size)  
 
 
-player1_frames = slice_sprite_sheet("assets/player1_sheet.png", (50, 50))
-player2_frames = slice_sprite_sheet("assets/player2_sheet.png", (50, 50))
+player1_frames = slice_sprite_sheet(resource_path("assets/player1_sheet.png"), (50, 50))
+player2_frames = slice_sprite_sheet(resource_path("assets/player2_sheet.png"), (50, 50))
 ANIMATION_SPEED = 8  # lower = faster animation
 
 obstacle_images = [
-    load_image_cropped("assets/obstacle1.png", (60, 40)),
-    load_image_cropped("assets/obstacle2.png", (60, 40)),
-    load_image_cropped("assets/obstacle3.png", (60, 40)),
+    load_image_cropped(resource_path("assets/obstacle1.png"), (60, 40)),
+    load_image_cropped(resource_path("assets/obstacle2.png"), (60, 40)),
+    load_image_cropped(resource_path("assets/obstacle3.png"), (60, 40)),
 ]
 background_img = pygame.transform.scale(
-    pygame.image.load("assets/background.png").convert(), (WIDTH, HEIGHT)
+    pygame.image.load(resource_path("assets/background.png")).convert(), (WIDTH, HEIGHT)
 )
 
-# ---------------------------------------------------------------------------
+_logo_raw = pygame.image.load(resource_path("assets/logo.png")).convert_alpha()
+_logo_w = 360
+_logo_h = int(_logo_w * _logo_raw.get_height() / _logo_raw.get_width())
+logo_img = pygame.transform.smoothscale(_logo_raw, (_logo_w, _logo_h))
+
+
 # Sound effects
-# ---------------------------------------------------------------------------
 def make_beep(frequency=440, duration_ms=150, volume=0.3):
     """Generate a simple sine-wave beep in code - no sound file needed."""
     sample_rate = 44100
@@ -151,17 +153,15 @@ def make_beep(frequency=440, duration_ms=150, volume=0.3):
 
 
 hit_sound = make_beep(frequency=180, duration_ms=120, volume=0.4)
-gameover_sound = pygame.mixer.Sound("assets/gameover.mp3")
-levelup_sound = pygame.mixer.Sound("assets/levelup.mp3")
+gameover_sound = pygame.mixer.Sound(resource_path("assets/gameover.mp3"))
+levelup_sound = pygame.mixer.Sound(resource_path("assets/levelup.mp3"))
 
-pygame.mixer.music.load("assets/background_music.mp3")
+pygame.mixer.music.load(resource_path("assets/background_music.mp3"))
 pygame.mixer.music.set_volume(0.4)
 pygame.mixer.music.play(-1)  # -1 = loop forever
 
-# ---------------------------------------------------------------------------
 # Two separate "rooms" side by side on the same screen
 # Left half = room 1, right half = room 2
-# ---------------------------------------------------------------------------
 ROOM1_X_RANGE = (0, WIDTH // 2 - 5)
 ROOM2_X_RANGE = (WIDTH // 2 + 5, WIDTH)
 
@@ -239,13 +239,11 @@ def draw_room_divider():
 
 def draw_start_screen():
     screen.blit(background_img, (0, 0))
-    draw_room_divider()
 
-    title_font = pygame.font.SysFont(None, 64)
-    title_text = title_font.render("SPLIT CONTROL", True, (255, 255, 255))
-    screen.blit(title_text, (WIDTH // 2 - title_text.get_width() // 2, 100))
+    # Logo (already contains the game title), centred at the top
+    screen.blit(logo_img, (WIDTH // 2 - logo_img.get_width() // 2, 8))
 
-    line_font = pygame.font.SysFont(None, 32)
+    line_font = pygame.font.SysFont(None, 28)
     lines = [
         f"Best Score: {high_score}",
         "",
@@ -255,9 +253,10 @@ def draw_start_screen():
         "",
         "Press any key to start",
     ]
+    top = logo_img.get_height() + 22
     for i, line in enumerate(lines):
         line_text = line_font.render(line, True, (230, 230, 230))
-        screen.blit(line_text, (WIDTH // 2 - line_text.get_width() // 2, 200 + i * 35))
+        screen.blit(line_text, (WIDTH // 2 - line_text.get_width() // 2, top + i * 30))
 
     pygame.display.update()
 
